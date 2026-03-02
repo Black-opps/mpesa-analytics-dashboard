@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/mpesa-analytics-dashboard/static/css/main.fbaf2116.css",
+    "main.js": "/mpesa-analytics-dashboard/static/js/main.ef6a416c.js",
+    "index.html": "/mpesa-analytics-dashboard/index.html",
+    "main.fbaf2116.css.map": "/mpesa-analytics-dashboard/static/css/main.fbaf2116.css.map",
+    "main.ef6a416c.js.map": "/mpesa-analytics-dashboard/static/js/main.ef6a416c.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.fbaf2116.css",
+    "static/js/main.ef6a416c.js"
+  ]
+}
