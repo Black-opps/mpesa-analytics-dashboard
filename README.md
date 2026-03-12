@@ -14,7 +14,7 @@
 
 ---
 
-## 👋 **Overview**
+##  **Overview**
 
 The **MPesa Analytics Dashboard** is the perfect companion to the [MPesa Analytics API](https://github.com/Black-opps/mpesa-analytics-api). It's a modern, feature-rich single-page application (SPA) built to consume the API and present financial data through an intuitive and powerful user interface.
 
@@ -155,12 +155,7 @@ docker run -p 3000:3000 mpesa-dashboard
 🔗 Integration with MPesa Analytics API
 This dashboard is designed to work seamlessly with the companion backend API. Ensure the API is running and the REACT_APP_API_URL in your .env file points to the correct address.
 
-Default API URL: http://localhost:8000
 
-Default Login Credentials (After running reset_db.py on the API)
-Regular User: test@example.com / password123
-
-Admin User: admin@example.com / admin123
 
 📊 Dashboard Walkthrough
 For Regular Users
