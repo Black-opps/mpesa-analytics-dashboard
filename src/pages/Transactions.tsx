@@ -1,8 +1,10 @@
+// src/pages/Transactions.tsx - FIXED VERSION
+
 import React, { useEffect, useState } from "react";
 import {
   Box,
-  Typography,
   Paper,
+  Typography,
   Table,
   TableBody,
   TableCell,
@@ -11,36 +13,77 @@ import {
   TableRow,
   TablePagination,
   Chip,
+  IconButton,
   TextField,
-  MenuItem,
-  Grid,
+  InputAdornment,
+  Alert,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Stack,
 } from "@mui/material";
-import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { fetchTransactions } from "../store/slices/transactionSlice";
+import { Search, Refresh, Add, Edit, Delete } from "@mui/icons-material";
+import api from "../services/api";
 import LoadingSpinner from "../components/common/LoadingSpinner";
-import {
-  Transaction,
-  TransactionType,
-  TransactionStatus,
-} from "../types/transaction";
+
+interface Transaction {
+  id: string;
+  transaction_id: string;
+  amount: number;
+  transaction_type: string;
+  counterparty: string;
+  timestamp: string;
+  status: "completed" | "pending" | "failed";
+}
 
 const Transactions: React.FC = () => {
-  const dispatch = useAppDispatch();
-  const { transactions, pagination, loading } = useAppSelector(
-    (state) => state.transactions
-  );
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [limit, setLimit] = useState(20);
-  const [filter, setFilter] = useState({
-    type: "",
-    status: "",
-    phoneNumber: "",
-  });
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<Transaction | null>(null);
 
   useEffect(() => {
-    dispatch(fetchTransactions({ page: page + 1, limit }));
-  }, [dispatch, page, limit]);
+    fetchTransactions();
+  }, []);
+
+  const fetchTransactions = async () => {
+    setLoading(true);
+    try {
+      // Fetch real transactions from API
+      const data = await api.fetchTransactions(0, 100);
+      console.log("📊 Transactions from API:", data);
+
+      if (data && data.length > 0) {
+        // API returned real data
+        setTransactions(data);
+        setError(null);
+      } else {
+        // No transactions found for this user
+        setTransactions([]);
+        setError(null);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch transactions:", err);
+      setError(err.message || "Failed to fetch transactions");
+
+      // NO MOCK DATA FALLBACK - show empty state instead
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
@@ -49,135 +92,256 @@ const Transactions: React.FC = () => {
   const handleChangeRowsPerPage = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setLimit(parseInt(event.target.value, 10));
+    setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
 
-  const getStatusColor = (status: TransactionStatus) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case TransactionStatus.SUCCESS:
+      case "completed":
         return "success";
-      case TransactionStatus.FAILED:
-        return "error";
-      case TransactionStatus.PENDING:
+      case "pending":
         return "warning";
+      case "failed":
+        return "error";
       default:
         return "default";
     }
   };
+
+  const filteredTransactions = transactions.filter((transaction) => {
+    const matchesSearch =
+      transaction.transaction_id
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      transaction.counterparty.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter =
+      filterType === "all" || transaction.transaction_type === filterType;
+    return matchesSearch && matchesFilter;
+  });
+
+  const paginatedTransactions = filteredTransactions.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
 
   if (loading) {
     return <LoadingSpinner message="Loading transactions..." />;
   }
 
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Transactions
-      </Typography>
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={3}
+      >
+        <Typography variant="h4" fontWeight={600}>
+          Transactions
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<Add />}
+          onClick={() => {
+            setSelectedTransaction(null);
+            setOpenDialog(true);
+          }}
+        >
+          New Transaction
+        </Button>
+      </Box>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid size={{ xs: 12, sm: 3 }} component="div">
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Transaction Type"
-              value={filter.type}
-              onChange={(e) => setFilter({ ...filter, type: e.target.value })}
+      {/* Filters */}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <TextField
+            size="small"
+            placeholder="Search by ID or counterparty..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1 }}
+          />
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Filter by Type</InputLabel>
+            <Select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              label="Filter by Type"
             >
-              <MenuItem value="">All</MenuItem>
-              {Object.values(TransactionType).map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }} component="div">
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Status"
-              value={filter.status}
-              onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-            >
-              <MenuItem value="">All</MenuItem>
-              {Object.values(TransactionStatus).map((status) => (
-                <MenuItem key={status} value={status}>
-                  {status}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }} component="div">
-            <TextField
-              fullWidth
-              size="small"
-              label="Phone Number"
-              value={filter.phoneNumber}
-              onChange={(e) =>
-                setFilter({ ...filter, phoneNumber: e.target.value })
-              }
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 3 }} component="div">
-            <Button variant="contained" fullWidth>
-              Apply Filters
-            </Button>
-          </Grid>
-        </Grid>
+              <MenuItem value="all">All Types</MenuItem>
+              <MenuItem value="send_money">Send Money</MenuItem>
+              <MenuItem value="pay_bill">Pay Bill</MenuItem>
+              <MenuItem value="buy_goods">Buy Goods</MenuItem>
+              <MenuItem value="withdraw">Withdraw</MenuItem>
+            </Select>
+          </FormControl>
+          <IconButton onClick={fetchTransactions}>
+            <Refresh />
+          </IconButton>
+        </Stack>
       </Paper>
 
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Transaction ID</TableCell>
-                <TableCell>Phone Number</TableCell>
-                <TableCell>Amount</TableCell>
-                <TableCell>Type</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Timestamp</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {transactions.map((transaction: Transaction) => (
-                <TableRow key={transaction.id}>
+      {/* Error Message */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Transactions Table */}
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Transaction ID</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell>Amount</TableCell>
+              <TableCell>Counterparty</TableCell>
+              <TableCell>Date</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell align="right">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {paginatedTransactions.length > 0 ? (
+              paginatedTransactions.map((transaction) => (
+                <TableRow key={transaction.id} hover>
                   <TableCell>{transaction.transaction_id}</TableCell>
-                  <TableCell>{transaction.phone_number}</TableCell>
-                  <TableCell>
-                    KES {transaction.amount.toLocaleString()}
-                  </TableCell>
-                  <TableCell>{transaction.type}</TableCell>
                   <TableCell>
                     <Chip
-                      label={transaction.status}
-                      color={getStatusColor(transaction.status)}
+                      label={transaction.transaction_type.replace("_", " ")}
                       size="small"
+                      variant="outlined"
                     />
                   </TableCell>
                   <TableCell>
-                    {new Date(transaction.timestamp).toLocaleString()}
+                    KES {transaction.amount.toLocaleString()}
+                  </TableCell>
+                  <TableCell>{transaction.counterparty}</TableCell>
+                  <TableCell>
+                    {new Date(transaction.timestamp).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={transaction.status}
+                      color={getStatusColor(transaction.status) as any}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setSelectedTransaction(transaction);
+                        setOpenDialog(true);
+                      }}
+                    >
+                      <Edit fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="error">
+                      <Delete fontSize="small" />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    No transactions found for this user
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Add />}
+                    onClick={() => setOpenDialog(true)}
+                    sx={{ mt: 2 }}
+                  >
+                    Add Your First Transaction
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
         <TablePagination
-          rowsPerPageOptions={[10, 20, 50]}
+          rowsPerPageOptions={[5, 10, 25]}
           component="div"
-          count={pagination.total}
-          rowsPerPage={limit}
+          count={filteredTransactions.length}
+          rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
         />
-      </Paper>
+      </TableContainer>
+
+      {/* Transaction Dialog */}
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedTransaction ? "Edit Transaction" : "New Transaction"}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <TextField
+              label="Transaction ID"
+              fullWidth
+              size="small"
+              defaultValue={selectedTransaction?.transaction_id}
+            />
+            <FormControl fullWidth size="small">
+              <InputLabel>Transaction Type</InputLabel>
+              <Select
+                label="Transaction Type"
+                defaultValue={
+                  selectedTransaction?.transaction_type || "send_money"
+                }
+              >
+                <MenuItem value="send_money">Send Money</MenuItem>
+                <MenuItem value="pay_bill">Pay Bill</MenuItem>
+                <MenuItem value="buy_goods">Buy Goods</MenuItem>
+                <MenuItem value="withdraw">Withdraw</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Amount"
+              type="number"
+              fullWidth
+              size="small"
+              defaultValue={selectedTransaction?.amount}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">KES</InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              label="Counterparty"
+              fullWidth
+              size="small"
+              defaultValue={selectedTransaction?.counterparty}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button variant="contained" onClick={() => setOpenDialog(false)}>
+            {selectedTransaction ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

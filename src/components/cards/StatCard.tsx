@@ -7,7 +7,7 @@ import {
   SvgIconProps,
   alpha,
 } from "@mui/material";
-import { TrendingUp, TrendingDown, MoreVert } from "@mui/icons-material";
+import { TrendingUp, TrendingDown } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
 
 interface StatCardProps {

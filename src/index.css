@@ -220,3 +220,18 @@ code {
   background: #6366f1;
   color: white;
 }
+
+/* src/index.css - Add this at the end */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
