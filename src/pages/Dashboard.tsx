@@ -1,306 +1,390 @@
-﻿// src/pages/Dashboard.tsx
-import React, { useEffect, useState, useCallback } from "react";
-import {
-  Container,
-  Grid,
-  Paper,
-  Typography,
-  Box,
-  CircularProgress,
-  Alert,
-  Divider,
-  Card,
-  CardContent,
-} from "@mui/material";
-import { BarChart, PieChart } from "../components/charts";
-import api from "../services/api"; // FIXED: default import
+// src/pages/Dashboard.tsx
 
-// Define types based on actual API response
-interface AnalyticsResponse {
-  total_sent: number;
-  total_received: number;
-  transaction_count: number;
-}
+import React, { useMemo, useState } from "react";
 
-interface DailyData {
-  date: string;
-  amount: number;
-}
+import { AppShell } from "../components/layout/AppShell";
+import { Sidebar } from "../components/layout/Sidebar";
+import { Topbar } from "../components/layout/Topbar";
 
-interface TransactionType {
-  type: string;
-  amount: number;
-  count: number;
-}
+import { SummaryCards } from "../components/dashboard/SummaryCards";
+import { InsightFeed } from "../components/dashboard/InsightFeed";
+import { DonutChart } from "../components/dashboard/DonutChart";
+import { RecentActivity } from "../components/dashboard/RecentActivity";
 
-interface TopCustomer {
-  counterparty: string;
-  total: number;
-  count: number;
-}
+import { PeopleAndBusinesses } from "../components/people/PeopleAndBusinesses";
 
-interface ExtendedAnalytics {
-  daily_totals: DailyData[];
-  transaction_types: TransactionType[];
-  top_customers: TopCustomer[];
-}
+import { PaywallModal } from "../components/paywall/PaywallModal";
 
-export default function Dashboard() {
-  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
-  const [extendedAnalytics, setExtendedAnalytics] =
-    useState<ExtendedAnalytics | null>(null);
-  const [loading, setLoading] = useState({
-    summary: true,
-    trends: true,
-    transactionTypes: true,
-    topCustomers: true,
-  });
-  const [error, setError] = useState<string | null>(null);
+import { Card } from "../components/ui/Card";
 
-  const fetchExtendedAnalytics = useCallback(async () => {
-    try {
-      let dailyData: DailyData[] = [];
-      let transactionTypes: TransactionType[] = [];
-      let topCustomers: TopCustomer[] = [];
+import { colors } from "../design/colors";
 
-      try {
-        const dailyResponse = await api.get("/analytics/daily");
-        dailyData = dailyResponse as DailyData[];
-        setLoading((prev) => ({ ...prev, trends: false }));
-      } catch {
-        dailyData = generateMockDailyData();
-        setLoading((prev) => ({ ...prev, trends: false }));
-      }
+const insights = [
+  {
+    title: "Your income is stable",
+    description:
+      "You received consistent payments this month with predictable inflows.",
+    type: "success" as const,
+    locked: false,
+  },
+  {
+    title: "Transport spending is high",
+    description:
+      "Uber expenses increased 40% week-over-week from your normal baseline.",
+    type: "warning" as const,
+    locked: true,
+  },
+  {
+    title: "Top expense: Food",
+    description: "Food spending now represents 35% of total monthly outflows.",
+    type: "info" as const,
+    locked: false,
+  },
+];
 
-      try {
-        const typesResponse = await api.get("/analytics/transaction-types");
-        transactionTypes = typesResponse as TransactionType[];
-        setLoading((prev) => ({ ...prev, transactionTypes: false }));
-      } catch {
-        transactionTypes = generateMockTransactionTypes();
-        setLoading((prev) => ({ ...prev, transactionTypes: false }));
-      }
+const mockSearchResults = {
+  name: "Jane Mwangi",
+  phone: "0712345678",
+  totalSent: 84000,
+  totalReceived: 15000,
+  transactionCount: 42,
+  firstSeen: "Jan 15, 2024",
+  lastSeen: "May 7, 2026",
+};
 
-      try {
-        const customersResponse = await api.get("/analytics/top-customers");
-        topCustomers = customersResponse as TopCustomer[];
-        setLoading((prev) => ({ ...prev, topCustomers: false }));
-      } catch {
-        topCustomers = generateMockTopCustomers();
-        setLoading((prev) => ({ ...prev, topCustomers: false }));
-      }
+export const Dashboard: React.FC = () => {
+  const [showPaywall, setShowPaywall] = useState(false);
 
-      setExtendedAnalytics({
-        daily_totals: dailyData,
-        transaction_types: transactionTypes,
-        top_customers: topCustomers,
-      });
-    } catch (err) {
-      console.error("Error fetching extended analytics:", err);
-    }
+  const [isPro] = useState(false);
+
+  const [searchResults, setSearchResults] = useState<any>(null);
+
+  const [isSearching, setIsSearching] = useState(false);
+
+  const financialHealth = useMemo(() => {
+    return {
+      score: 82,
+      status: "Excellent",
+      trend: "+6%",
+    };
   }, []);
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      setLoading((prev) => ({ ...prev, summary: true }));
-      const response = (await api.get(
-        "/analytics/summary"
-      )) as AnalyticsResponse;
-      setAnalytics(response);
-      setLoading((prev) => ({ ...prev, summary: false }));
-
-      await fetchExtendedAnalytics();
-    } catch (err) {
-      setError("Failed to fetch dashboard data");
-      console.error("Dashboard error:", err);
-      setLoading({
-        summary: false,
-        trends: false,
-        transactionTypes: false,
-        topCustomers: false,
-      });
-    }
-  }, [fetchExtendedAnalytics]);
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
-
-  // Mock data generators (temporary until backend endpoints are ready)
-  const generateMockDailyData = (): DailyData[] => {
-    const data = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      data.push({
-        date: date.toISOString().split("T")[0],
-        amount: Math.floor(Math.random() * 10000 + 5000),
-      });
-    }
-    return data;
+  const handleUpload = () => {
+    alert("Upload M-PESA Statement");
   };
 
-  const generateMockTransactionTypes = (): TransactionType[] => {
-    return [
-      { type: "send_money", amount: 45000, count: 15 },
-      { type: "pay_bill", amount: 32000, count: 8 },
-      { type: "buy_goods", amount: 18000, count: 12 },
-      { type: "withdraw", amount: 25000, count: 5 },
-    ];
+  const handlePay = () => {
+    alert("M-PESA Payment Flow");
   };
 
-  const generateMockTopCustomers = (): TopCustomer[] => {
-    return [
-      { counterparty: "254712345678", total: 25000, count: 8 },
-      { counterparty: "254723456789", total: 18000, count: 6 },
-      { counterparty: "254734567890", total: 12500, count: 4 },
-      { counterparty: "254745678901", total: 9500, count: 3 },
-      { counterparty: "254756789012", total: 7200, count: 2 },
-    ];
-  };
+  const handleSearch = async (query: string) => {
+    console.log("Searching:", query);
 
-  if (error) {
-    return (
-      <Container>
-        <Alert severity="error">{error}</Alert>
-      </Container>
-    );
-  }
+    setIsSearching(true);
+
+    setTimeout(() => {
+      setSearchResults(mockSearchResults);
+      setIsSearching(false);
+    }, 1200);
+  };
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      {/* Summary Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total Sent
-              </Typography>
-              <Typography variant="h4">
-                {loading.summary ? (
-                  <CircularProgress size={30} />
-                ) : (
-                  `KES ${analytics?.total_sent?.toLocaleString() || 0}`
-                )}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+    <AppShell
+      sidebar={<Sidebar isPro={isPro} />}
+      topbar={
+        <Topbar
+          onUpload={handleUpload}
+          isPro={isPro}
+          onUpgrade={() => setShowPaywall(true)}
+        />
+      }
+    >
+      <div
+        className="fade-in main-padding"
+        style={{
+          maxWidth: "1500px",
+          margin: "0 auto",
+        }}
+      >
+        {/* HERO */}
+        <div
+          style={{
+            marginBottom: "30px",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "24px",
+            flexWrap: "wrap",
+            alignItems: "stretch",
+          }}
+        >
+          {/* LEFT HERO */}
+          <div
+            style={{
+              flex: 1,
+              minWidth: "320px",
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "8px 14px",
+                borderRadius: "999px",
+                background: `${colors.status.success}12`,
+                border: `1px solid ${colors.status.success}22`,
+                marginBottom: "18px",
+              }}
+            >
+              <div className="live-dot" />
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Total Received
-              </Typography>
-              <Typography variant="h4">
-                {loading.summary ? (
-                  <CircularProgress size={30} />
-                ) : (
-                  `KES ${analytics?.total_received?.toLocaleString() || 0}`
-                )}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+              <span
+                style={{
+                  color: colors.status.success,
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  letterSpacing: "0.3px",
+                }}
+              >
+                LIVE FINANCIAL INTELLIGENCE
+              </span>
+            </div>
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Transaction Count
-              </Typography>
-              <Typography variant="h4">
-                {loading.summary ? (
-                  <CircularProgress size={30} />
-                ) : (
-                  analytics?.transaction_count?.toLocaleString() || 0
-                )}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            <div
+              style={{
+                fontSize: "44px",
+                fontWeight: 800,
+                color: colors.text.primary,
+                letterSpacing: "-2px",
+                lineHeight: 1.05,
+                marginBottom: "18px",
+                maxWidth: "900px",
+              }}
+            >
+              Financial Intelligence Dashboard
+            </div>
 
-      {/* Daily Trends Chart */}
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Daily Transaction Trends
-        </Typography>
-        {loading.trends ? (
-          <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <BarChart
-            data={extendedAnalytics?.daily_totals || []}
-            xKey="date"
-            yKey="amount"
-            title="Daily Transaction Volume"
-            height={400}
-          />
-        )}
-      </Paper>
+            <div
+              style={{
+                color: colors.text.secondary,
+                fontSize: "16px",
+                maxWidth: "760px",
+                lineHeight: 1.8,
+              }}
+            >
+              Analyze transaction behavior, uncover AI-powered spending
+              insights, monitor counterparties, and build a complete financial
+              operating system for mobile money intelligence.
+            </div>
+          </div>
 
-      {/* Transaction Types Distribution */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <PieChart
-            data={extendedAnalytics?.transaction_types || []}
-            title="Transaction Distribution by Type"
-            height={420}
-            isLoading={loading.transactionTypes}
-          />
-        </Grid>
+          {/* HEALTH SCORE */}
+          <Card
+            style={{
+              width: "340px",
+              minWidth: "340px",
+              position: "relative",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: "-50px",
+                right: "-50px",
+                width: "180px",
+                height: "180px",
+                borderRadius: "50%",
+                background: "rgba(60,230,174,0.10)",
+                filter: "blur(40px)",
+              }}
+            />
 
-        {/* Top Customers */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Top Customers
-            </Typography>
-            {loading.topCustomers ? (
-              <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : (
-              <Box>
-                {extendedAnalytics?.top_customers?.map((customer, index) => (
-                  <Box
-                    key={customer.counterparty}
-                    sx={{
+            <div
+              style={{
+                position: "relative",
+                zIndex: 2,
+              }}
+            >
+              <div
+                style={{
+                  color: colors.text.secondary,
+                  fontSize: "13px",
+                  marginBottom: "16px",
+                  fontWeight: 600,
+                }}
+              >
+                AI Financial Health
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: "10px",
+                  marginBottom: "14px",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "64px",
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    color: colors.status.success,
+                    letterSpacing: "-3px",
+                  }}
+                >
+                  {financialHealth.score}
+                </div>
+
+                <div
+                  style={{
+                    paddingBottom: "10px",
+                    color: colors.text.secondary,
+                    fontSize: "18px",
+                    fontWeight: 600,
+                  }}
+                >
+                  /100
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "24px",
+                }}
+              >
+                <div
+                  style={{
+                    color: colors.text.primary,
+                    fontWeight: 700,
+                    fontSize: "18px",
+                  }}
+                >
+                  {financialHealth.status}
+                </div>
+
+                <div
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: `${colors.status.success}14`,
+                    color: colors.status.success,
+                    fontSize: "12px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {financialHealth.trend}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
+                {[
+                  "Income consistency",
+                  "Spending discipline",
+                  "Savings behavior",
+                  "Transaction stability",
+                ].map((item) => (
+                  <div
+                    key={item}
+                    style={{
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      py: 1,
-                      borderBottom:
-                        index <
-                        (extendedAnalytics?.top_customers.length || 0) - 1
-                          ? "1px solid #eee"
-                          : "none",
                     }}
                   >
-                    <Box>
-                      <Typography variant="body1">
-                        {customer.counterparty}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {customer.count} transactions
-                      </Typography>
-                    </Box>
-                    <Typography variant="body1" sx={{ fontWeight: "bold" }}>
-                      KES {customer.total.toLocaleString()}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </Paper>
-        </Grid>
-      </Grid>
+                    <span
+                      style={{
+                        color: colors.text.secondary,
+                        fontSize: "13px",
+                      }}
+                    >
+                      {item}
+                    </span>
 
-      <Divider sx={{ my: 3 }} />
-    </Container>
+                    <span
+                      style={{
+                        color: colors.text.primary,
+                        fontWeight: 700,
+                        fontSize: "13px",
+                      }}
+                    >
+                      Strong
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* KPI */}
+        <SummaryCards moneyIn="150000" moneyOut="23000" netFlow="127000" />
+
+        {/* GRID */}
+        <div
+          className="dashboard-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.1fr 0.9fr",
+            gap: "24px",
+            marginTop: "24px",
+            alignItems: "start",
+          }}
+        >
+          {/* LEFT */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "24px",
+            }}
+          >
+            <DonutChart />
+
+            <RecentActivity />
+
+            <PeopleAndBusinesses
+              isPro={isPro}
+              onUnlock={() => setShowPaywall(true)}
+              onSearch={handleSearch}
+              searchResults={searchResults}
+              isLoading={isSearching}
+            />
+          </div>
+
+          {/* RIGHT */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "24px",
+            }}
+          >
+            <InsightFeed
+              insights={insights}
+              onUnlock={() => setShowPaywall(true)}
+            />
+          </div>
+        </div>
+
+        {/* PAYWALL */}
+        <PaywallModal
+          isOpen={showPaywall}
+          onClose={() => setShowPaywall(false)}
+          onPay={handlePay}
+        />
+      </div>
+    </AppShell>
   );
-}
+};
+
+export default Dashboard;
