@@ -1,50 +1,69 @@
 // src/components/dashboard/DonutChart.tsx
-
 import React from "react";
+import { SpendingCategory } from "../../services/dashboard.service";
+import { Card } from "../ui/Card";
 import { colors } from "../../design/colors";
 
-export const DonutChart: React.FC = () => {
-  const items = [
-    {
-      label: "Food",
-      value: "KES 9K",
-      color: "#3CE6AE",
-    },
-    {
-      label: "Bills",
-      value: "KES 7K",
-      color: "#8B5CF6",
-    },
-    {
-      label: "Transport",
-      value: "KES 5K",
-      color: "#EF4444",
-    },
-    {
-      label: "Other",
-      value: "KES 2K",
-      color: "#64748B",
-    },
-  ];
+interface DonutChartProps {
+  categories: SpendingCategory[];
+  totalSpent?: number;
+  loading?: boolean;
+}
 
-  return (
-    <div
-      className="card-hover fade-in"
-      style={{
-        background: colors.card,
-        border: `1px solid ${colors.border}`,
-        borderRadius: "26px",
-        padding: "30px",
-        boxShadow: "0 14px 40px rgba(0,0,0,0.12)",
-        transition: "all 0.25s ease",
-      }}
-    >
-      {/* HEADER */}
-      <div
+const categoryColors: Record<string, string> = {
+  Food: "#3CE6AE",
+  Transport: "#EF4444",
+  Bills: "#8B5CF6",
+  Shopping: "#F59E0B",
+  Entertainment: "#EC4899",
+  Other: "#64748B",
+};
+
+export const DonutChart: React.FC<DonutChartProps> = ({
+  categories,
+  totalSpent,
+  loading = false,
+}) => {
+  if (loading) {
+    return (
+      <Card
         style={{
-          marginBottom: "28px",
+          padding: "30px",
+          background: colors.card,
+          border: `1px solid ${colors.border}`,
         }}
       >
+        <div style={{ color: colors.text.secondary }}>
+          Loading spending breakdown...
+        </div>
+      </Card>
+    );
+  }
+
+  // Calculate total spent from categories if not provided
+  const calculatedTotal = categories.reduce((sum, c) => sum + c.amount, 0);
+  const displayTotal = totalSpent ?? calculatedTotal;
+  const items = categories.slice(0, 4);
+  const remainingTotal = categories
+    .slice(4)
+    .reduce((sum, c) => sum + c.amount, 0);
+  if (remainingTotal > 0) {
+    items.push({
+      name: "Other",
+      amount: remainingTotal,
+      percentage: Math.round((remainingTotal / displayTotal) * 100),
+    });
+  }
+
+  return (
+    <Card
+      style={{
+        padding: "30px",
+        background: colors.card,
+        border: `1px solid ${colors.border}`,
+      }}
+    >
+      <div style={{ marginBottom: "28px" }}>
         <div
           style={{
             color: colors.text.primary,
@@ -55,26 +74,19 @@ export const DonutChart: React.FC = () => {
         >
           Spending Breakdown
         </div>
-
-        <div
-          style={{
-            color: colors.text.secondary,
-            fontSize: "13px",
-          }}
-        >
+        <div style={{ color: colors.text.secondary, fontSize: "13px" }}>
           Your spending distribution over the last 30 days
         </div>
       </div>
-
-      <div className="donut-wrapper">
-        {/* DONUT */}
-        <div
-          style={{
-            position: "relative",
-            width: "240px",
-            height: "240px",
-          }}
-        >
+      <div
+        style={{
+          display: "flex",
+          gap: "30px",
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <div style={{ position: "relative", width: "240px", height: "240px" }}>
           <svg width="240" height="240" viewBox="0 0 240 240">
             <circle
               cx="120"
@@ -84,45 +96,29 @@ export const DonutChart: React.FC = () => {
               stroke={colors.borderLight}
               strokeWidth="30"
             />
-
-            <circle
-              cx="120"
-              cy="120"
-              r="82"
-              fill="none"
-              stroke="#3CE6AE"
-              strokeWidth="30"
-              strokeDasharray="190 325"
-              transform="rotate(-90 120 120)"
-              strokeLinecap="round"
-            />
-
-            <circle
-              cx="120"
-              cy="120"
-              r="82"
-              fill="none"
-              stroke="#8B5CF6"
-              strokeWidth="30"
-              strokeDasharray="120 400"
-              strokeDashoffset="-200"
-              transform="rotate(-90 120 120)"
-              strokeLinecap="round"
-            />
-
-            <circle
-              cx="120"
-              cy="120"
-              r="82"
-              fill="none"
-              stroke="#EF4444"
-              strokeWidth="30"
-              strokeDasharray="90 430"
-              strokeDashoffset="-330"
-              transform="rotate(-90 120 120)"
-              strokeLinecap="round"
-            />
-
+            {items.map((item, index) => {
+              const circumference = 2 * Math.PI * 82;
+              const dashArray = (item.percentage / 100) * circumference;
+              let currentAngle = -90;
+              for (let i = 0; i < index; i++) {
+                currentAngle += (items[i].percentage / 100) * 360;
+              }
+              return (
+                <circle
+                  key={item.name}
+                  cx="120"
+                  cy="120"
+                  r="82"
+                  fill="none"
+                  stroke={categoryColors[item.name] || colors.text.muted}
+                  strokeWidth="30"
+                  strokeDasharray={`${dashArray} ${circumference}`}
+                  strokeDashoffset={-currentAngle * (circumference / 360)}
+                  transform={`rotate(${currentAngle} 120 120)`}
+                  strokeLinecap="round"
+                />
+              );
+            })}
             <text
               x="120"
               y="114"
@@ -131,9 +127,8 @@ export const DonutChart: React.FC = () => {
               fontWeight="800"
               fill={colors.text.primary}
             >
-              23K
+              {Math.round(displayTotal / 1000)}K
             </text>
-
             <text
               x="120"
               y="138"
@@ -145,18 +140,10 @@ export const DonutChart: React.FC = () => {
             </text>
           </svg>
         </div>
-
-        {/* LEGEND */}
-        <div
-          style={{
-            flex: 1,
-            minWidth: "220px",
-          }}
-        >
+        <div style={{ flex: 1, minWidth: "220px" }}>
           {items.map((item) => (
             <div
-              key={item.label}
-              className="hover-lift"
+              key={item.name}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
@@ -167,22 +154,19 @@ export const DonutChart: React.FC = () => {
               }}
             >
               <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: "12px" }}
               >
                 <div
                   style={{
                     width: "12px",
                     height: "12px",
                     borderRadius: "50%",
-                    background: item.color,
-                    boxShadow: `0 0 14px ${item.color}`,
+                    background: categoryColors[item.name] || colors.text.muted,
+                    boxShadow: `0 0 14px ${
+                      categoryColors[item.name] || colors.text.muted
+                    }`,
                   }}
                 />
-
                 <span
                   style={{
                     color: colors.text.secondary,
@@ -190,10 +174,9 @@ export const DonutChart: React.FC = () => {
                     fontWeight: 500,
                   }}
                 >
-                  {item.label}
+                  {item.name}
                 </span>
               </div>
-
               <span
                 style={{
                   color: colors.text.primary,
@@ -201,12 +184,12 @@ export const DonutChart: React.FC = () => {
                   fontSize: "14px",
                 }}
               >
-                {item.value}
+                KES {item.amount.toLocaleString()}
               </span>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </Card>
   );
 };

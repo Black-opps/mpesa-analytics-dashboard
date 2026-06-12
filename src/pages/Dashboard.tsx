@@ -1,6 +1,6 @@
 // src/pages/Dashboard.tsx
-
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { AppShell } from "../components/layout/AppShell";
 import { Sidebar } from "../components/layout/Sidebar";
@@ -12,81 +12,371 @@ import { DonutChart } from "../components/dashboard/DonutChart";
 import { RecentActivity } from "../components/dashboard/RecentActivity";
 
 import { PeopleAndBusinesses } from "../components/people/PeopleAndBusinesses";
-
 import { PaywallModal } from "../components/paywall/PaywallModal";
-
-import { Card } from "../components/ui/Card";
+import UploadWizard from "../components/upload/UploadWizard";
 
 import { colors } from "../design/colors";
-
-const insights = [
-  {
-    title: "Your income is stable",
-    description:
-      "You received consistent payments this month with predictable inflows.",
-    type: "success" as const,
-    locked: false,
-  },
-  {
-    title: "Transport spending is high",
-    description:
-      "Uber expenses increased 40% week-over-week from your normal baseline.",
-    type: "warning" as const,
-    locked: true,
-  },
-  {
-    title: "Top expense: Food",
-    description: "Food spending now represents 35% of total monthly outflows.",
-    type: "info" as const,
-    locked: false,
-  },
-];
-
-const mockSearchResults = {
-  name: "Jane Mwangi",
-  phone: "0712345678",
-  totalSent: 84000,
-  totalReceived: 15000,
-  transactionCount: 42,
-  firstSeen: "Jan 15, 2024",
-  lastSeen: "May 7, 2026",
-};
+import { useAuth } from "../features/auth/hooks/useAuth";
+import { generateInsights, InsightData } from "../services/insightEngine";
+import { dashboardService } from "../services/dashboard.service";
 
 export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
+
+  // UI State
   const [showPaywall, setShowPaywall] = useState(false);
-
-  const [isPro] = useState(false);
-
+  const [showUploader, setShowUploader] = useState(false);
   const [searchResults, setSearchResults] = useState<any>(null);
-
   const [isSearching, setIsSearching] = useState(false);
 
-  const financialHealth = useMemo(() => {
-    return {
-      score: 82,
-      status: "Excellent",
-      trend: "+6%",
-    };
-  }, []);
+  // Data State
+  const [summary, setSummary] = useState<any>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [legacyInsights, setLegacyInsights] = useState<any[]>([]);
 
-  const handleUpload = () => {
-    alert("Upload M-PESA Statement");
+  // NEW: Intelligence insights from engine
+  const [intelligenceInsights, setIntelligenceInsights] = useState<
+    InsightData[]
+  >([]);
+  const [isInsightsLoading, setIsInsightsLoading] = useState(true);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Ledger verification state
+  const [ledgerVerified, setLedgerVerified] = useState(false);
+  const [verifyingLedger, setVerifyingLedger] = useState(true);
+
+  const isPro = useMemo(
+    () => user?.role === "owner" || user?.role === "admin",
+    [user]
+  );
+
+  // Calculate total spent for donut chart
+  const totalSpent = useMemo(() => {
+    return categories.reduce((sum, c) => sum + c.amount, 0);
+  }, [categories]);
+
+  // ========================
+  // HELPER: Calculate Spending Categories from Transactions
+  // ========================
+  const calculateSpendingCategories = (transactions: any[]) => {
+    const categoryMap: { [key: string]: number } = {};
+
+    // Only count sent transactions (expenses)
+    const sentTransactions = transactions.filter(
+      (tx) => tx.type === "sent" || tx.transaction_type === "sent"
+    );
+
+    sentTransactions.forEach((tx) => {
+      let category = "Other";
+      const counterparty = (tx.counterparty || "").toLowerCase();
+      const description = (tx.description || "").toLowerCase();
+      const searchText = `${counterparty} ${description}`;
+
+      // Food & Dining
+      if (
+        searchText.includes("naivas") ||
+        searchText.includes("supermarket") ||
+        searchText.includes("food") ||
+        searchText.includes("restaurant") ||
+        searchText.includes("cafe") ||
+        searchText.includes("kfc") ||
+        searchText.includes("java") ||
+        searchText.includes("mama mboga")
+      ) {
+        category = "Food";
+      }
+      // Transport
+      else if (
+        searchText.includes("uber") ||
+        searchText.includes("taxi") ||
+        searchText.includes("fuel") ||
+        searchText.includes("petrol") ||
+        searchText.includes("transport") ||
+        searchText.includes("bolt")
+      ) {
+        category = "Transport";
+      }
+      // Bills & Utilities
+      else if (
+        searchText.includes("kplc") ||
+        searchText.includes("water") ||
+        searchText.includes("electricity") ||
+        searchText.includes("bill") ||
+        searchText.includes("token") ||
+        searchText.includes("internet")
+      ) {
+        category = "Bills";
+      }
+      // Shopping
+      else if (
+        searchText.includes("shop") ||
+        searchText.includes("mall") ||
+        searchText.includes("store") ||
+        searchText.includes("amazon")
+      ) {
+        category = "Shopping";
+      }
+      // Entertainment
+      else if (
+        searchText.includes("netflix") ||
+        searchText.includes("spotify") ||
+        searchText.includes("cinema") ||
+        searchText.includes("movie")
+      ) {
+        category = "Entertainment";
+      }
+      // Large transfers (over 10,000 KES)
+      else if (tx.amount >= 10000) {
+        category = "Large Transfers";
+      }
+
+      categoryMap[category] = (categoryMap[category] || 0) + tx.amount;
+    });
+
+    // Convert to array format expected by DonutChart
+    const total = Object.values(categoryMap).reduce((a, b) => a + b, 0);
+
+    return Object.entries(categoryMap).map(([name, amount]) => ({
+      name,
+      amount,
+      percentage: total > 0 ? Math.round((amount / total) * 100) : 0,
+    }));
   };
 
+  // ========================
+  // LOAD DASHBOARD DATA
+  // ========================
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get all dashboard data
+      const data = await dashboardService.getDashboardData();
+
+      setSummary(data.summary);
+      setTransactions(data.recent_transactions || []);
+
+      // ✅ FIX: Calculate categories from transactions if API doesn't provide them
+      if (data.spending_breakdown && data.spending_breakdown.length > 0) {
+        setCategories(data.spending_breakdown);
+      } else if (
+        data.recent_transactions &&
+        data.recent_transactions.length > 0
+      ) {
+        // Calculate categories locally
+        const calculatedCategories = calculateSpendingCategories(
+          data.recent_transactions
+        );
+        setCategories(calculatedCategories);
+      } else {
+        setCategories([]);
+      }
+
+      // Generate insights from the summary data (for backward compatibility)
+      const generatedInsights: any[] = [];
+      if (data.summary.money_in > 0) {
+        generatedInsights.push({
+          type: "positive",
+          title: "Your income is stable",
+          description: `You received KES ${data.summary.money_in.toLocaleString()} in payments.`,
+        });
+      }
+      if (data.summary.money_out > 0) {
+        generatedInsights.push({
+          type: "warning",
+          title: "Track your spending",
+          description: `Your total expenses are KES ${data.summary.money_out.toLocaleString()}.`,
+        });
+      }
+      if (generatedInsights.length === 0) {
+        generatedInsights.push({
+          type: "insight",
+          title: "Upload your first statement",
+          description:
+            "Upload an M-PESA statement to see personalized financial insights.",
+        });
+      }
+      setLegacyInsights(generatedInsights);
+
+      // Generate INTELLIGENCE insights from transaction data
+      if (data.recent_transactions && data.recent_transactions.length > 0) {
+        setIsInsightsLoading(true);
+        const intelligence = generateInsights(data.recent_transactions);
+        setIntelligenceInsights(intelligence);
+        setIsInsightsLoading(false);
+      } else {
+        setIntelligenceInsights([]);
+        setIsInsightsLoading(false);
+      }
+    } catch (err) {
+      console.error("Failed to load dashboard:", err);
+      setError("Failed to load dashboard data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // ========================
+  // LEDGER VERIFICATION - FIXED VERSION
+  // ========================
+  useEffect(() => {
+    const verifyLedger = async () => {
+      try {
+        setVerifyingLedger(true);
+        const token = localStorage.getItem("auth_token");
+
+        if (!token) {
+          console.warn("No token found for ledger verification");
+          setLedgerVerified(false);
+          return;
+        }
+
+        // Direct call to transaction service (bypass gateway to avoid React Router)
+        const response = await fetch(
+          "http://localhost:8006/api/v1/transactions/reconcile",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log("Ledger verification:", data);
+          setLedgerVerified(
+            data.status === "verified" || data.integrity?.is_consistent === true
+          );
+        } else {
+          console.warn("Ledger verification returned status:", response.status);
+          setLedgerVerified(false);
+        }
+      } catch (error) {
+        console.warn("Ledger verification skipped:", error);
+        setLedgerVerified(false);
+      } finally {
+        setVerifyingLedger(false);
+      }
+    };
+    verifyLedger();
+  }, []);
+
+  // ========================
+  // HEALTH SCORE
+  // ========================
+  const financialHealth = useMemo(() => {
+    return {
+      score: summary?.financial_health_score ?? 0,
+      status: summary?.grade ?? "Building",
+      trend: "+6%",
+    };
+  }, [summary]);
+
+  // ========================
+  // ACTIONS
+  // ========================
+  const handleUpload = useCallback(() => setShowUploader(true), []);
+
+  const handleUploadComplete = useCallback(() => {
+    setShowUploader(false);
+    loadDashboardData(); // Refresh all data
+  }, [loadDashboardData]);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    navigate("/login");
+  }, [logout, navigate]);
+
   const handlePay = () => {
-    alert("M-PESA Payment Flow");
+    alert("M-PESA Payment Flow - Coming Soon");
   };
 
   const handleSearch = async (query: string) => {
-    console.log("Searching:", query);
-
     setIsSearching(true);
-
-    setTimeout(() => {
-      setSearchResults(mockSearchResults);
+    try {
+      const results = await dashboardService.searchEntities(query);
+      setSearchResults(results);
+    } catch (err) {
+      console.error("Search failed:", err);
+      setSearchResults(null);
+    } finally {
       setIsSearching(false);
-    }, 1200);
+    }
   };
+
+  // Decide which insights to show (prioritize intelligence engine, fallback to legacy)
+  const displayInsights = useMemo(() => {
+    if (intelligenceInsights.length > 0) {
+      return intelligenceInsights;
+    }
+    return legacyInsights;
+  }, [intelligenceInsights, legacyInsights]);
+
+  // ========================
+  // LOADING STATE
+  // ========================
+  if (loading) {
+    return (
+      <AppShell
+        sidebar={<Sidebar isPro={isPro} />}
+        topbar={
+          <Topbar
+            onUpload={handleUpload}
+            isPro={isPro}
+            onUpgrade={() => setShowPaywall(true)}
+          />
+        }
+      >
+        <div
+          style={{
+            padding: "40px",
+            textAlign: "center",
+            color: colors.text.secondary,
+          }}
+        >
+          Loading dashboard...
+        </div>
+      </AppShell>
+    );
+  }
+
+  // ========================
+  // ERROR STATE
+  // ========================
+  if (error) {
+    return (
+      <AppShell
+        sidebar={<Sidebar isPro={isPro} />}
+        topbar={
+          <Topbar
+            onUpload={handleUpload}
+            isPro={isPro}
+            onUpgrade={() => setShowPaywall(true)}
+          />
+        }
+      >
+        <div
+          style={{
+            padding: "40px",
+            textAlign: "center",
+            color: colors.status.danger,
+          }}
+        >
+          {error}
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell
@@ -106,6 +396,84 @@ export const Dashboard: React.FC = () => {
           margin: "0 auto",
         }}
       >
+        {/* HEADER ACTIONS */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "20px",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* LEDGER VERIFICATION BADGE - IMPROVED MESSAGE */}
+            {!verifyingLedger && ledgerVerified && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "6px 14px",
+                  background: "rgba(34,197,94,0.1)",
+                  borderRadius: "100px",
+                  color: "#22C55E",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                }}
+              >
+                <span>✓</span> FINANCIAL INTELLIGENCE ACTIVE
+              </div>
+            )}
+            {!verifyingLedger && !ledgerVerified && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "6px 14px",
+                  background: "rgba(245,158,11,0.1)",
+                  borderRadius: "100px",
+                  color: "#F59E0B",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                }}
+              >
+                <span>⟳</span> BUILDING FINANCIAL PROFILE
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                color: colors.text.secondary,
+                fontSize: "14px",
+              }}
+            >
+              {user?.full_name || user?.email}
+            </div>
+
+            <button
+              onClick={handleLogout}
+              style={{
+                height: "44px",
+                padding: "0 18px",
+                borderRadius: "12px",
+                border: "1px solid rgba(255,255,255,0.08)",
+                background: "rgba(255,255,255,0.04)",
+                color: colors.text.primary,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+
         {/* HERO */}
         <div
           style={{
@@ -179,8 +547,12 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* HEALTH SCORE */}
-          <Card
+          <div
             style={{
+              background: colors.card,
+              border: `1px solid ${colors.border}`,
+              borderRadius: "26px",
+              padding: "30px",
               width: "340px",
               minWidth: "340px",
               position: "relative",
@@ -229,7 +601,12 @@ export const Dashboard: React.FC = () => {
                     fontSize: "64px",
                     fontWeight: 800,
                     lineHeight: 1,
-                    color: colors.status.success,
+                    color:
+                      financialHealth.score >= 70
+                        ? colors.status.success
+                        : financialHealth.score >= 40
+                        ? colors.status.warning
+                        : colors.status.danger,
                     letterSpacing: "-3px",
                   }}
                 >
@@ -288,13 +665,25 @@ export const Dashboard: React.FC = () => {
                 }}
               >
                 {[
-                  "Income consistency",
-                  "Spending discipline",
-                  "Savings behavior",
-                  "Transaction stability",
+                  {
+                    label: "Income consistency",
+                    value: transactions.length > 20 ? "Strong" : "Building",
+                  },
+                  {
+                    label: "Spending discipline",
+                    value: summary?.spending_discipline || "Learning",
+                  },
+                  {
+                    label: "Savings behavior",
+                    value: transactions.length > 30 ? "Detected" : "Analyzing",
+                  },
+                  {
+                    label: "Transaction stability",
+                    value: transactions.length > 15 ? "Stable" : "Building",
+                  },
                 ].map((item) => (
                   <div
-                    key={item}
+                    key={item.label}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
@@ -307,7 +696,7 @@ export const Dashboard: React.FC = () => {
                         fontSize: "13px",
                       }}
                     >
-                      {item}
+                      {item.label}
                     </span>
 
                     <span
@@ -317,17 +706,21 @@ export const Dashboard: React.FC = () => {
                         fontSize: "13px",
                       }}
                     >
-                      Strong
+                      {item.value}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
-          </Card>
+          </div>
         </div>
 
-        {/* KPI */}
-        <SummaryCards moneyIn="150000" moneyOut="23000" netFlow="127000" />
+        {/* KPI CARDS */}
+        <SummaryCards
+          moneyIn={summary?.money_in ?? 0}
+          moneyOut={summary?.money_out ?? 0}
+          netFlow={summary?.net_flow ?? 0}
+        />
 
         {/* GRID */}
         <div
@@ -340,7 +733,7 @@ export const Dashboard: React.FC = () => {
             alignItems: "start",
           }}
         >
-          {/* LEFT */}
+          {/* LEFT COLUMN */}
           <div
             style={{
               display: "flex",
@@ -348,10 +741,8 @@ export const Dashboard: React.FC = () => {
               gap: "24px",
             }}
           >
-            <DonutChart />
-
-            <RecentActivity />
-
+            <DonutChart categories={categories} totalSpent={totalSpent} />
+            <RecentActivity transactions={transactions} />
             <PeopleAndBusinesses
               isPro={isPro}
               onUnlock={() => setShowPaywall(true)}
@@ -361,7 +752,7 @@ export const Dashboard: React.FC = () => {
             />
           </div>
 
-          {/* RIGHT */}
+          {/* RIGHT COLUMN - INTELLIGENCE FEED */}
           <div
             style={{
               display: "flex",
@@ -370,13 +761,25 @@ export const Dashboard: React.FC = () => {
             }}
           >
             <InsightFeed
-              insights={insights}
+              insights={displayInsights}
+              isLoading={isInsightsLoading}
+              transactionCount={transactions.length}
+              onUpload={handleUpload}
               onUnlock={() => setShowPaywall(true)}
             />
           </div>
         </div>
 
-        {/* PAYWALL */}
+        {/* UPLOAD WIZARD MODAL */}
+        {showUploader && (
+          <UploadWizard
+            token={localStorage.getItem("auth_token") || ""}
+            onUploadComplete={handleUploadComplete}
+            onClose={() => setShowUploader(false)}
+          />
+        )}
+
+        {/* PAYWALL MODAL */}
         <PaywallModal
           isOpen={showPaywall}
           onClose={() => setShowPaywall(false)}

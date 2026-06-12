@@ -1,20 +1,14 @@
 // src/App.tsx
-
 import React from "react";
-import { BrowserRouter } from "react-router-dom";
+import AppRouter from "./router/AppRouter";
 import { AuthProvider } from "./features/auth/store/authStore";
-import Dashboard from "./pages/Dashboard";
 
-function App() {
+const App = () => {
   return (
-    <BrowserRouter>
-      {" "}
-      {/* ✅ Router MUST be the outermost wrapper */}
-      <AuthProvider>
-        <Dashboard />
-      </AuthProvider>
-    </BrowserRouter>
+    <AuthProvider>
+      <AppRouter />
+    </AuthProvider>
   );
-}
+};
 
 export default App;

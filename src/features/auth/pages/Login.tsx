@@ -1,127 +1,137 @@
+// src/features/auth/pages/Login.tsx
 import React, { useState } from "react";
-
 import { useNavigate, Link } from "react-router-dom";
-
 import { useAuth } from "../hooks/useAuth";
 
 export const Login: React.FC = () => {
+  const [email, setEmail] = useState("admin@example.com");
+  const [password, setPassword] = useState("Test123!");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
-  const { login } = useAuth();
-
-  const [email, setEmail] = useState("");
-
-  const [password, setPassword] = useState("");
-
-  const [loading, setLoading] = useState(false);
-
+  // src/features/auth/pages/Login.tsx
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
     try {
-      setLoading(true);
-
-      await login({
-        email,
-        password,
-      });
-
-      navigate("/dashboard");
-    } catch (error) {
-      alert("Invalid credentials");
+      await login(email, password);
+      console.log("✅ Login successful, redirecting to dashboard...");
+      // Force a small delay to ensure state updates
+      setTimeout(() => {
+        navigate("/dashboard", { replace: true });
+      }, 100);
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError(err.response?.data?.detail || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        background: "#0A0F1D",
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          width: "400px",
-          background: "#11162A",
-          padding: "32px",
-          borderRadius: "20px",
-          border: "1px solid #1E293B",
-        }}
-      >
-        <h1
-          style={{
-            color: "white",
-            marginBottom: "24px",
-          }}
-        >
-          Login
-        </h1>
-
+    <div style={styles.container}>
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <h2 style={styles.title}>MPesa Analytics</h2>
+        {error && <div style={styles.error}>{error}</div>}
         <input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          style={{
-            width: "100%",
-            height: "52px",
-            marginBottom: "16px",
-            borderRadius: "12px",
-            border: "1px solid #334155",
-            padding: "0 16px",
-            background: "#0F172A",
-            color: "white",
-          }}
+          style={styles.input}
+          disabled={loading}
+          required
         />
-
         <input
           type="password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          style={{
-            width: "100%",
-            height: "52px",
-            marginBottom: "24px",
-            borderRadius: "12px",
-            border: "1px solid #334155",
-            padding: "0 16px",
-            background: "#0F172A",
-            color: "white",
-          }}
+          style={styles.input}
+          disabled={loading}
+          required
         />
-
         <button
           type="submit"
+          style={loading ? styles.buttonDisabled : styles.button}
           disabled={loading}
-          style={{
-            width: "100%",
-            height: "52px",
-            borderRadius: "12px",
-            border: "none",
-            background: "#3CE6AE",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
         >
-          {loading ? "Signing in..." : "Login"}
+          {loading ? "Logging in..." : "Login"}
         </button>
-
-        <div
-          style={{
-            marginTop: "16px",
-            color: "#94A3B8",
-          }}
-        >
-          No account? <Link to="/register">Register</Link>
+        <div style={styles.links}>
+          <Link to="/register">Create Account</Link>
+          <Link to="/forgot-password">Forgot Password?</Link>
         </div>
       </form>
     </div>
   );
+};
+
+const styles = {
+  container: {
+    minHeight: "100vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#020617",
+  },
+  form: {
+    background: "#1e293b",
+    padding: "40px",
+    borderRadius: "12px",
+    width: "400px",
+  },
+  title: {
+    color: "white",
+    marginBottom: "24px",
+    textAlign: "center" as const,
+  },
+  input: {
+    width: "100%",
+    padding: "12px",
+    marginBottom: "16px",
+    borderRadius: "6px",
+    border: "1px solid #334155",
+    background: "#0f172a",
+    color: "white",
+    fontSize: "14px",
+  },
+  button: {
+    width: "100%",
+    padding: "12px",
+    background: "#3b82f6",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "16px",
+    fontWeight: "bold",
+  },
+  buttonDisabled: {
+    width: "100%",
+    padding: "12px",
+    background: "#64748b",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "not-allowed",
+  },
+  error: {
+    background: "#dc2626",
+    color: "white",
+    padding: "12px",
+    borderRadius: "6px",
+    marginBottom: "16px",
+    fontSize: "14px",
+  },
+  links: {
+    display: "flex",
+    justifyContent: "space-between",
+    marginTop: "20px",
+    color: "#93c5fd",
+  },
 };

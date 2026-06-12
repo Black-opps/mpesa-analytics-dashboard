@@ -3,27 +3,33 @@
 import React from "react";
 import { colors } from "../../design/colors";
 import { theme } from "../../design/theme";
-
 interface CardProps {
   children: React.ReactNode;
   style?: React.CSSProperties;
+  onClick?: (e: React.MouseEvent) => void;
+  onMouseEnter?: (e: React.MouseEvent) => void;
+  onMouseLeave?: (e: React.MouseEvent) => void;
 }
 
-export const Card: React.FC<CardProps> = ({ children, style }) => {
+export const Card: React.FC<CardProps> = ({
+  children,
+  style,
+  onClick,
+  onMouseEnter,
+  onMouseLeave,
+}) => {
   return (
     <div
-      className="card-hover fade-in"
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       style={{
         background: colors.card,
         border: `1px solid ${colors.border}`,
-        borderRadius: theme.radius.lg,
-        padding: theme.spacing.lg,
-        boxShadow: theme.shadows.md,
-        transition: theme.transitions.normal,
-        position: "relative",
-        overflow: "hidden",
-        backdropFilter: "blur(14px)",
-        WebkitBackdropFilter: "blur(14px)",
+        borderRadius: "16px",
+        padding: "20px",
+        transition: "all 0.2s ease",
+        cursor: onClick ? "pointer" : "default",
         ...style,
       }}
     >

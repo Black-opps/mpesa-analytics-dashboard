@@ -1,4 +1,4 @@
-// src/design/colors.ts
+// src/design/colors.ts - KEEP YOUR ORIGINAL, JUST ADD MISSING PROPERTIES
 
 export const colors = {
   bg: "var(--bg)",
@@ -6,12 +6,16 @@ export const colors = {
 
   card: "var(--card)",
   cardSecondary: "var(--card-secondary)",
-
-  // backward compatibility
   cardLight: "var(--card-secondary)",
 
   border: "var(--border)",
   borderLight: "var(--border-light)",
+
+  // ✅ ADD THIS - for components that need background
+  background: "var(--bg)",
+
+  // ✅ ADD THIS - for primary color reference
+  primary: "var(--text-accent)",
 
   text: {
     primary: "var(--text-primary)",

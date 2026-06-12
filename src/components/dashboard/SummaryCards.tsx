@@ -1,21 +1,21 @@
 // src/components/dashboard/SummaryCards.tsx
-
 import React from "react";
 import CountUp from "react-countup";
-
 import { colors } from "../../design/colors";
 import { Card } from "../ui/Card";
 
 interface SummaryCardsProps {
-  moneyIn: string;
-  moneyOut: string;
-  netFlow: string;
+  moneyIn: string | number;
+  moneyOut: string | number;
+  netFlow: string | number;
+  loading?: boolean;
 }
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
   moneyIn,
   moneyOut,
   netFlow,
+  loading = false,
 }) => {
   const cards = [
     {
@@ -47,6 +47,33 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
     },
   ];
 
+  if (loading) {
+    return (
+      <div
+        className="summary-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "20px",
+          marginBottom: "24px",
+        }}
+      >
+        {[1, 2, 3].map((i) => (
+          <Card
+            key={i}
+            style={{
+              padding: "30px",
+              background: colors.card,
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            <div style={{ color: colors.text.secondary }}>Loading...</div>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       className="summary-grid"
@@ -69,10 +96,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         >
           <div
             className="hover-lift glow kpi-card"
-            style={{
-              position: "relative",
-              overflow: "hidden",
-            }}
+            style={{ position: "relative", overflow: "hidden" }}
           >
             <div
               style={{
@@ -86,13 +110,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                 filter: "blur(30px)",
               }}
             />
-
-            <div
-              style={{
-                position: "relative",
-                zIndex: 2,
-              }}
-            >
+            <div style={{ position: "relative", zIndex: 2 }}>
               <div
                 style={{
                   display: "flex",
@@ -112,7 +130,6 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   >
                     {card.label}
                   </div>
-
                   <div
                     style={{
                       display: "inline-flex",
@@ -129,7 +146,6 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                     {card.trend}
                   </div>
                 </div>
-
                 <div
                   style={{
                     width: "44px",
@@ -148,7 +164,6 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   {card.icon}
                 </div>
               </div>
-
               <div
                 style={{
                   fontSize: "42px",
@@ -166,7 +181,6 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   prefix="KES "
                 />
               </div>
-
               <div
                 style={{
                   height: "48px",
@@ -188,22 +202,10 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
                   />
                 ))}
               </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div
-                  style={{
-                    color: colors.text.muted,
-                    fontSize: "12px",
-                  }}
-                >
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div style={{ color: colors.text.muted, fontSize: "12px" }}>
                   Updated just now
                 </div>
-
                 <div
                   style={{
                     color: colors.text.secondary,
